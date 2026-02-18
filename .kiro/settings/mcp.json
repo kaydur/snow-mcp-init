@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "servicenow": {
+      "command": "node",
+      "args": ["dist/main.js"],
+      "cwd": "/Users/kaylin.durmick/snowPDIone",
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+}
