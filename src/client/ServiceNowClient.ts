@@ -191,6 +191,255 @@ export class ServiceNowClient {
       throw this.handleError(error);
     }
   }
+
+  /**
+   * Create a new record in a ServiceNow table
+   * 
+   * @param table - ServiceNow table name (e.g., 'sys_script_include')
+   * @param data - Record data to create
+   * @returns Promise resolving to created ServiceNowRecord
+   * @throws ServiceNowError if request fails
+   */
+  async post(table: string, data: Record<string, any>): Promise<ServiceNowRecord> {
+    const startTime = Date.now();
+    
+    try {
+      // Build URL for table
+      const url = `${this.config.instanceUrl}/api/now/table/${table}`;
+      
+      logger.debug('api_request', 'Executing POST request', {
+        params: { table, fields: Object.keys(data) }
+      });
+      
+      // Get authentication headers
+      const headers = this.authManager.getAuthHeaders();
+      
+      if (!this.authManager.isAuthenticated()) {
+        throw this.createError('AUTH_ERROR', 'Not authenticated. Please authenticate before making API calls.');
+      }
+
+      // Execute request with timeout
+      const timeout = this.config.timeout || this.DEFAULT_TIMEOUT;
+      const response = await axios.post(url, data, {
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json'
+        },
+        timeout,
+        httpsAgent: this.httpsAgent,
+        validateStatus: () => true // Don't throw on any status code
+      });
+
+      // Handle authentication errors
+      if (response.status === 401) {
+        this.authManager.handleExpiration();
+        throw this.createError('AUTH_EXPIRED', 'Session expired. Please re-authenticate.');
+      }
+
+      // Handle forbidden errors
+      if (response.status === 403) {
+        throw this.createError('FORBIDDEN', 'Access forbidden. User does not have required permissions.');
+      }
+
+      // Handle not found errors
+      if (response.status === 404) {
+        throw this.createError('NOT_FOUND', `Table '${table}' not found or does not exist.`);
+      }
+
+      // Handle other HTTP errors
+      if (response.status !== 201 && response.status !== 200) {
+        const errorText = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+        throw this.createError(
+          'API_ERROR',
+          `ServiceNow API error: ${response.status} ${response.statusText}`,
+          errorText
+        );
+      }
+
+      // Parse and return response
+      const responseData = response.data as { result: ServiceNowRecord };
+      const duration = Date.now() - startTime;
+      
+      logger.debug('api_response', 'POST request successful', {
+        result: { sys_id: responseData.result.sys_id },
+        duration
+      });
+      
+      return responseData.result;
+
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      logger.error('api_request', 'POST request failed', {
+        error: error,
+        duration
+      });
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Update an existing record in a ServiceNow table
+   * 
+   * @param table - ServiceNow table name (e.g., 'sys_script_include')
+   * @param sysId - System ID of the record to update
+   * @param data - Record data to update
+   * @returns Promise resolving to updated ServiceNowRecord
+   * @throws ServiceNowError if request fails or record not found
+   */
+  async put(table: string, sysId: string, data: Record<string, any>): Promise<ServiceNowRecord> {
+    const startTime = Date.now();
+    
+    try {
+      // Build URL for specific record
+      const url = `${this.config.instanceUrl}/api/now/table/${table}/${sysId}`;
+      
+      logger.debug('api_request', 'Executing PUT request', {
+        params: { table, sysId, fields: Object.keys(data) }
+      });
+      
+      // Get authentication headers
+      const headers = this.authManager.getAuthHeaders();
+      
+      if (!this.authManager.isAuthenticated()) {
+        throw this.createError('AUTH_ERROR', 'Not authenticated. Please authenticate before making API calls.');
+      }
+
+      // Execute request with timeout
+      const timeout = this.config.timeout || this.DEFAULT_TIMEOUT;
+      const response = await axios.put(url, data, {
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json'
+        },
+        timeout,
+        httpsAgent: this.httpsAgent,
+        validateStatus: () => true // Don't throw on any status code
+      });
+
+      // Handle authentication errors
+      if (response.status === 401) {
+        this.authManager.handleExpiration();
+        throw this.createError('AUTH_EXPIRED', 'Session expired. Please re-authenticate.');
+      }
+
+      // Handle forbidden errors
+      if (response.status === 403) {
+        throw this.createError('FORBIDDEN', 'Access forbidden. User does not have required permissions.');
+      }
+
+      // Handle not found errors
+      if (response.status === 404) {
+        throw this.createError('NOT_FOUND', `Record with sys_id '${sysId}' not found in table '${table}'.`);
+      }
+
+      // Handle other HTTP errors
+      if (response.status !== 200) {
+        const errorText = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+        throw this.createError(
+          'API_ERROR',
+          `ServiceNow API error: ${response.status} ${response.statusText}`,
+          errorText
+        );
+      }
+
+      // Parse and return response
+      const responseData = response.data as { result: ServiceNowRecord };
+      const duration = Date.now() - startTime;
+      
+      logger.debug('api_response', 'PUT request successful', {
+        result: { sys_id: responseData.result.sys_id },
+        duration
+      });
+      
+      return responseData.result;
+
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      logger.error('api_request', 'PUT request failed', {
+        error: error,
+        duration
+      });
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Delete a record from a ServiceNow table
+   * 
+   * @param table - ServiceNow table name (e.g., 'sys_script_include')
+   * @param sysId - System ID of the record to delete
+   * @returns Promise resolving when deletion is complete
+   * @throws ServiceNowError if request fails or record not found
+   */
+  async delete(table: string, sysId: string): Promise<void> {
+    const startTime = Date.now();
+    
+    try {
+      // Build URL for specific record
+      const url = `${this.config.instanceUrl}/api/now/table/${table}/${sysId}`;
+      
+      logger.debug('api_request', 'Executing DELETE request', {
+        params: { table, sysId }
+      });
+      
+      // Get authentication headers
+      const headers = this.authManager.getAuthHeaders();
+      
+      if (!this.authManager.isAuthenticated()) {
+        throw this.createError('AUTH_ERROR', 'Not authenticated. Please authenticate before making API calls.');
+      }
+
+      // Execute request with timeout
+      const timeout = this.config.timeout || this.DEFAULT_TIMEOUT;
+      const response = await axios.delete(url, {
+        headers,
+        timeout,
+        httpsAgent: this.httpsAgent,
+        validateStatus: () => true // Don't throw on any status code
+      });
+
+      // Handle authentication errors
+      if (response.status === 401) {
+        this.authManager.handleExpiration();
+        throw this.createError('AUTH_EXPIRED', 'Session expired. Please re-authenticate.');
+      }
+
+      // Handle forbidden errors
+      if (response.status === 403) {
+        throw this.createError('FORBIDDEN', 'Access forbidden. User does not have required permissions.');
+      }
+
+      // Handle not found errors
+      if (response.status === 404) {
+        throw this.createError('NOT_FOUND', `Record with sys_id '${sysId}' not found in table '${table}'.`);
+      }
+
+      // Handle other HTTP errors
+      if (response.status !== 204 && response.status !== 200) {
+        const errorText = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+        throw this.createError(
+          'API_ERROR',
+          `ServiceNow API error: ${response.status} ${response.statusText}`,
+          errorText
+        );
+      }
+
+      const duration = Date.now() - startTime;
+      logger.debug('api_response', 'DELETE request successful', {
+        result: { success: true },
+        duration
+      });
+
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      logger.error('api_request', 'DELETE request failed', {
+        error: error,
+        duration
+      });
+      throw this.handleError(error);
+    }
+  }
+
   /**
    * Execute a server-side script on ServiceNow instance
    *

@@ -350,3 +350,280 @@ describe('ScriptSecurityValidator - Property-Based Tests', () => {
     });
   });
 });
+
+// Feature: script-include-management, Property 9: Dangerous Pattern Detection
+// **Validates: Requirements 1.6, 1.7, 3.3, 3.4, 7.2, 7.5, 9.1, 9.2, 9.3, 9.5**
+
+// Feature: script-include-management, Property 12: Discouraged Pattern Warnings
+// **Validates: Requirements 7.8, 7.9, 9.8**
+
+describe('ScriptSecurityValidator - Script Include Property-Based Tests', () => {
+  let validator: ScriptSecurityValidator;
+
+  beforeEach(() => {
+    validator = new ScriptSecurityValidator();
+  });
+
+  describe('Property 9: Dangerous Pattern Detection', () => {
+    it('should reject any Script Include code containing blacklisted patterns', async () => {
+      await fc.assert(
+        fc.property(
+          fc.record({
+            pattern: fc.constantFrom(
+              'eval',
+              'new Function',
+              'require',
+              'import',
+              'GlideHTTPRequest',
+              'RESTMessageV2',
+              'SOAPMessageV2',
+              'XMLDocument',
+              'gs.executeNow',
+              '.readFile',
+              '.writeFile',
+              '.getFile',
+              '.setFile',
+              'fs.'
+            ),
+            apiName: fc.string({ minLength: 3, maxLength: 20 }).filter(s => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(s)),
+            prefix: fc.constantFrom('', '  ', '\n', 'var x = '),
+            suffix: fc.constantFrom('', ';', '\n')
+          }),
+          ({ pattern, apiName, prefix, suffix }) => {
+            // Build Script Include with dangerous pattern
+            let dangerousCode: string;
+            if (pattern === 'import') {
+              dangerousCode = `${prefix}import something from "module"${suffix}`;
+            } else if (pattern === 'require') {
+              dangerousCode = `${prefix}require("module")${suffix}`;
+            } else if (pattern === 'new Function') {
+              dangerousCode = `${prefix}new Function("return 1")${suffix}`;
+            } else if (pattern.startsWith('Glide') || pattern.startsWith('REST') || pattern.startsWith('SOAP') || pattern.startsWith('XML')) {
+              dangerousCode = `${prefix}new ${pattern}()${suffix}`;
+            } else if (pattern.startsWith('.')) {
+              dangerousCode = `${prefix}file${pattern}("data")${suffix}`;
+            } else if (pattern === 'fs.') {
+              dangerousCode = `${prefix}fs.readFileSync("file")${suffix}`;
+            } else {
+              dangerousCode = `${prefix}${pattern}("code")${suffix}`;
+            }
+
+            const script = `var ${apiName} = Class.create();\n${apiName}.prototype = {\n  initialize: function() {},\n  dangerousMethod: function() {\n    ${dangerousCode}\n  },\n  type: '${apiName}'\n};`;
+
+            const result = validator.validateScriptInclude(script);
+
+            // Should reject with SECURITY_VIOLATION error
+            expect(result.valid).toBe(false);
+            expect(result.errors.length).toBeGreaterThan(0);
+            expect(result.errors.some(e => e.type === 'SECURITY_VIOLATION')).toBe(true);
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    it('should detect multiple security violations in the same Script Include', async () => {
+      await fc.assert(
+        fc.property(
+          fc.array(
+            fc.constantFrom(
+              'eval',
+              'new Function',
+              'GlideHTTPRequest',
+              'RESTMessageV2'
+            ),
+            { minLength: 2, maxLength: 4 }
+          ),
+          fc.string({ minLength: 3, maxLength: 20 }).filter(s => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(s)),
+          (patterns, apiName) => {
+            // Remove duplicates
+            const uniquePatterns = [...new Set(patterns)];
+            
+            // Build Script Include with multiple dangerous patterns
+            const dangerousMethods = uniquePatterns.map((pattern, idx) => {
+              let code: string;
+              if (pattern === 'eval') {
+                code = 'eval("code")';
+              } else if (pattern === 'new Function') {
+                code = 'new Function("return 1")';
+              } else {
+                code = `new ${pattern}()`;
+              }
+              return `  method${idx}: function() { ${code}; }`;
+            }).join(',\n');
+
+            const script = `var ${apiName} = Class.create();\n${apiName}.prototype = {\n  initialize: function() {},\n${dangerousMethods},\n  type: '${apiName}'\n};`;
+
+            const result = validator.validateScriptInclude(script);
+
+            // Should detect all security violations
+            expect(result.valid).toBe(false);
+            expect(result.errors.length).toBeGreaterThanOrEqual(uniquePatterns.length);
+            expect(result.errors.every(e => e.type === 'SECURITY_VIOLATION')).toBe(true);
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    it('should accept safe Script Include code without blacklisted patterns', async () => {
+      await fc.assert(
+        fc.property(
+          fc.record({
+            apiName: fc.string({ minLength: 3, maxLength: 20 }).filter(s => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(s)),
+            methodName: fc.string({ minLength: 3, maxLength: 20 }).filter(s => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(s)),
+            safeOperation: fc.constantFrom(
+              'new GlideDateTime()',
+              'new GlideQuery("incident")',
+              'gs.info("message")',
+              'gs.log("message")',
+              'gs.getProperty("prop")',
+              'gs.getUserID()',
+              'gs.getUserName()'
+            )
+          }),
+          ({ apiName, methodName, safeOperation }) => {
+            const script = `var ${apiName} = Class.create();\n${apiName}.prototype = {\n  initialize: function() {},\n  ${methodName}: function() {\n    return ${safeOperation};\n  },\n  type: '${apiName}'\n};`;
+
+            const result = validator.validateScriptInclude(script);
+
+            // Should not have security violations (may have warnings for GlideRecord if present)
+            expect(result.errors.length).toBe(0);
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+  });
+
+  describe('Property 12: Discouraged Pattern Warnings', () => {
+    it('should return valid: true with warnings for discouraged patterns', async () => {
+      await fc.assert(
+        fc.property(
+          fc.record({
+            pattern: fc.constantFrom('new GlideRecord', 'gs.print'),
+            apiName: fc.string({ minLength: 3, maxLength: 20 }).filter(s => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(s)),
+            table: fc.constantFrom('incident', 'problem', 'task', 'sys_user')
+          }),
+          ({ pattern, apiName, table }) => {
+            // Build Script Include with discouraged pattern
+            let discouragedCode: string;
+            if (pattern === 'new GlideRecord') {
+              discouragedCode = `var gr = new GlideRecord('${table}');\n    gr.query();`;
+            } else {
+              discouragedCode = `gs.print('debug message');`;
+            }
+
+            const script = `var ${apiName} = Class.create();\n${apiName}.prototype = {\n  initialize: function() {},\n  method: function() {\n    ${discouragedCode}\n  },\n  type: '${apiName}'\n};`;
+
+            const result = validator.validateScriptInclude(script);
+
+            // Should be valid but with warnings
+            expect(result.valid).toBe(true);
+            expect(result.errors.length).toBe(0);
+            expect(result.warnings.length).toBeGreaterThan(0);
+            expect(result.warnings.some(w => w.type === 'DISCOURAGED_PATTERN')).toBe(true);
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    it('should not flag safe patterns as discouraged', async () => {
+      await fc.assert(
+        fc.property(
+          fc.record({
+            apiName: fc.string({ minLength: 3, maxLength: 20 }).filter(s => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(s)),
+            safeOperation: fc.constantFrom(
+              'new GlideDateTime()',
+              'new GlideQuery("incident")',
+              'gs.info("message")',
+              'gs.log("message")',
+              'gs.warn("warning")',
+              'gs.error("error")'
+            )
+          }),
+          ({ apiName, safeOperation }) => {
+            const script = `var ${apiName} = Class.create();\n${apiName}.prototype = {\n  initialize: function() {},\n  method: function() {\n    return ${safeOperation};\n  },\n  type: '${apiName}'\n};`;
+
+            const result = validator.validateScriptInclude(script);
+
+            // Should be valid with no warnings
+            expect(result.valid).toBe(true);
+            expect(result.errors.length).toBe(0);
+            expect(result.warnings.length).toBe(0);
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    it('should distinguish between errors and warnings', async () => {
+      await fc.assert(
+        fc.property(
+          fc.record({
+            apiName: fc.string({ minLength: 3, maxLength: 20 }).filter(s => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(s)),
+            table: fc.constantFrom('incident', 'problem', 'task')
+          }),
+          ({ apiName, table }) => {
+            // Script with both dangerous pattern (error) and discouraged pattern (warning)
+            const script = `var ${apiName} = Class.create();\n${apiName}.prototype = {\n  initialize: function() {},\n  dangerousMethod: function() {\n    eval("code");\n  },\n  discouragedMethod: function() {\n    var gr = new GlideRecord('${table}');\n    gr.query();\n  },\n  type: '${apiName}'\n};`;
+
+            const result = validator.validateScriptInclude(script);
+
+            // Should be invalid due to error, but also have warnings
+            expect(result.valid).toBe(false);
+            expect(result.errors.length).toBeGreaterThan(0);
+            expect(result.errors.some(e => e.type === 'SECURITY_VIOLATION')).toBe(true);
+            expect(result.warnings.length).toBeGreaterThan(0);
+            expect(result.warnings.some(w => w.type === 'DISCOURAGED_PATTERN')).toBe(true);
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+  });
+
+  describe('Property 10: Script Length Limit Enforcement', () => {
+    it('should reject Script Include code exceeding maximum length', async () => {
+      await fc.assert(
+        fc.property(
+          fc.integer({ min: 10001, max: 15000 }),
+          fc.constantFrom('a', 'x', '/', ' '),
+          (length, char) => {
+            const script = char.repeat(length);
+
+            const result = validator.validateScriptInclude(script);
+
+            // Should reject due to length
+            expect(result.valid).toBe(false);
+            expect(result.errors.length).toBeGreaterThan(0);
+            expect(result.errors.some(e => e.type === 'VALIDATION_ERROR' && e.message.includes('maximum length'))).toBe(true);
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    it('should accept Script Include code within maximum length', async () => {
+      await fc.assert(
+        fc.property(
+          fc.integer({ min: 100, max: 10000 }),
+          fc.string({ minLength: 3, maxLength: 20 }).filter(s => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(s)),
+          (targetLength, apiName) => {
+            // Generate a safe script of specified length
+            const baseScript = `var ${apiName} = Class.create();\n${apiName}.prototype = {\n  initialize: function() {},\n  type: '${apiName}'\n};`;
+            const padding = '// '.repeat(Math.max(0, Math.floor((targetLength - baseScript.length) / 3)));
+            const script = baseScript + padding;
+
+            const result = validator.validateScriptInclude(script);
+
+            // Should not have length violation
+            expect(result.errors.every(e => !e.message.includes('maximum length'))).toBe(true);
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+  });
+});

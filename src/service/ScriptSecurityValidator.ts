@@ -1,7 +1,8 @@
 import { SecurityConfig, SecurityValidationResult } from '../types/interfaces.js';
+import { ScriptValidationResult, ValidationMessage } from '../types/scriptInclude.js';
 
 /**
- * ScriptSecurityValidator provides security validation for GlideQuery scripts
+ * ScriptSecurityValidator provides security validation for GlideQuery scripts and Script Includes
  * 
  * Validates scripts against blacklisted patterns, detects dangerous operations,
  * and enforces script length limits to prevent security vulnerabilities.
@@ -146,6 +147,87 @@ export class ScriptSecurityValidator {
     this.config = {
       ...this.config,
       ...config,
+    };
+  }
+
+  /**
+   * Blacklisted patterns specifically for Script Includes
+   * These patterns are security violations and will cause validation to fail
+   */
+  private static readonly SCRIPT_INCLUDE_BLACKLIST = [
+    { pattern: /eval\s*\(/i, message: 'eval()', detail: 'Arbitrary code execution is not allowed for security reasons' },
+    { pattern: /new\s+Function\s*\(/i, message: 'Function constructor', detail: 'Dynamic function creation is not allowed for security reasons' },
+    { pattern: /require\s*\(/i, message: 'require()', detail: 'Module loading is not allowed for security reasons' },
+    { pattern: /import\s+/i, message: 'import statement', detail: 'ES6 imports are not allowed for security reasons' },
+    { pattern: /GlideHTTPRequest/i, message: 'GlideHTTPRequest', detail: 'Unrestricted network requests are not allowed for security reasons' },
+    { pattern: /RESTMessageV2/i, message: 'RESTMessageV2', detail: 'REST API calls without proper configuration are not allowed' },
+    { pattern: /SOAPMessageV2/i, message: 'SOAPMessageV2', detail: 'SOAP calls without proper configuration are not allowed' },
+    { pattern: /XMLDocument/i, message: 'XMLDocument', detail: 'XML parsing with potential XXE vulnerabilities is not allowed' },
+    { pattern: /gs\.executeNow\s*\(/i, message: 'gs.executeNow()', detail: 'Immediate script execution is not allowed for security reasons' },
+    { pattern: /\.readFile\(/i, message: 'readFile()', detail: 'File system access is not allowed for security reasons' },
+    { pattern: /\.writeFile\(/i, message: 'writeFile()', detail: 'File system write is not allowed for security reasons' },
+    { pattern: /\.getFile\(/i, message: 'getFile()', detail: 'File system access is not allowed for security reasons' },
+    { pattern: /\.setFile\(/i, message: 'setFile()', detail: 'File system write is not allowed for security reasons' },
+    { pattern: /\bfs\./i, message: 'fs module', detail: 'File system module access is not allowed for security reasons' },
+  ];
+
+  /**
+   * Discouraged patterns for Script Includes
+   * These patterns generate warnings but don't fail validation
+   */
+  private static readonly SCRIPT_INCLUDE_DISCOURAGED = [
+    { pattern: /new\s+GlideRecord\s*\(/i, message: 'GlideRecord usage detected', detail: 'Consider using GlideQuery for better performance and modern API' },
+    { pattern: /gs\.print\s*\(/i, message: 'gs.print() usage detected', detail: 'Consider using gs.info() or gs.log() for proper logging' },
+  ];
+
+  /**
+   * Validate a Script Include script for security issues and best practices
+   * 
+   * Checks script length, blacklisted patterns (errors), and discouraged patterns (warnings).
+   * Unlike the standard validate() method, this returns separate errors and warnings.
+   * 
+   * @param script - Script Include code to validate
+   * @returns ScriptValidationResult with valid flag, warnings, and errors
+   */
+  validateScriptInclude(script: string): ScriptValidationResult {
+    const errors: ValidationMessage[] = [];
+    const warnings: ValidationMessage[] = [];
+
+    // Check script length
+    if (script.length > this.config.maxScriptLength) {
+      errors.push({
+        type: 'VALIDATION_ERROR',
+        message: 'Script exceeds maximum length',
+        detail: `Script length ${script.length} exceeds maximum of ${this.config.maxScriptLength} characters`
+      });
+    }
+
+    // Check against blacklisted patterns (security violations)
+    for (const { pattern, message, detail } of ScriptSecurityValidator.SCRIPT_INCLUDE_BLACKLIST) {
+      if (pattern.test(script)) {
+        errors.push({
+          type: 'SECURITY_VIOLATION',
+          message: `Detected dangerous pattern: ${message}`,
+          detail
+        });
+      }
+    }
+
+    // Check against discouraged patterns (warnings)
+    for (const { pattern, message, detail } of ScriptSecurityValidator.SCRIPT_INCLUDE_DISCOURAGED) {
+      if (pattern.test(script)) {
+        warnings.push({
+          type: 'DISCOURAGED_PATTERN',
+          message,
+          detail
+        });
+      }
+    }
+
+    return {
+      valid: errors.length === 0,
+      warnings,
+      errors
     };
   }
 }

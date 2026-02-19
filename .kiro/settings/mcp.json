@@ -1,9 +1,9 @@
 {
   "mcpServers": {
     "servicenow": {
-      "command": "node",
+      "command": "/usr/local/bin/node",
       "args": ["dist/main.js"],
-      "cwd": "/Users/kaylin.durmick/snowPDIone",
+      "cwd": "/Users/kaylin.durmick/snow-mcp-init",
       "disabled": false,
       "autoApprove": []
     }

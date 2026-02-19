@@ -6,5 +6,13 @@ export { MCPServer } from './MCPServer.js';
 export { 
   queryIncidentsSchema, 
   getIncidentSchema, 
-  listRecentIncidentsSchema 
+  listRecentIncidentsSchema,
+  createScriptIncludeSchema,
+  getScriptIncludeSchema,
+  updateScriptIncludeSchema,
+  deleteScriptIncludeSchema,
+  queryScriptIncludesSchema,
+  listRecentScriptIncludesSchema,
+  validateScriptIncludeSchema,
+  testScriptIncludeSchema
 } from './schemas.js';

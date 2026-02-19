@@ -7,6 +7,7 @@ export * from './TaskService.js';
 export * from './StoryService.js';
 export * from './ScrumTaskService.js';
 export * from './ChangeRequestService.js';
+export * from './ScriptIncludeService.js';
 export * from './GlideQueryExecutor.js';
 export * from './ScriptSecurityValidator.js';
 export * from './GlideQueryGenerator.js';

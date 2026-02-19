@@ -28,6 +28,11 @@ import { TaskService } from '../service/TaskService.js';
 import { StoryService } from '../service/StoryService.js';
 import { ScrumTaskService } from '../service/ScrumTaskService.js';
 import { ChangeRequestService } from '../service/ChangeRequestService.js';
+import { ScriptIncludeService } from '../service/ScriptIncludeService.js';
+import { WidgetService } from '../service/WidgetService.js';
+import { PageService } from '../service/PageService.js';
+import { PortalService } from '../service/PortalService.js';
+import { WidgetInstanceService } from '../service/WidgetInstanceService.js';
 import { 
   queryIncidentsHandler, 
   getIncidentHandler, 
@@ -60,6 +65,42 @@ import {
   listRecentChangeRequestsHandler
 } from '../tools/newHandlers.js';
 import {
+  createScriptIncludeHandler,
+  getScriptIncludeHandler,
+  updateScriptIncludeHandler,
+  deleteScriptIncludeHandler,
+  queryScriptIncludesHandler,
+  listRecentScriptIncludesHandler,
+  validateScriptIncludeHandler,
+  testScriptIncludeHandler
+} from '../tools/scriptIncludeHandlers.js';
+import {
+  createWidgetHandler,
+  getWidgetHandler,
+  updateWidgetHandler,
+  cloneWidgetHandler,
+  queryWidgetsHandler,
+  listRecentWidgetsHandler,
+  validateWidgetHandler,
+  getWidgetDependenciesHandler,
+  getPagesUsingWidgetHandler
+} from '../tools/widgetHandlers.js';
+import {
+  createPageHandler,
+  getPageHandler,
+  updatePageHandler,
+  queryPagesHandler,
+  listRecentPagesHandler,
+  getWidgetsByPageHandler
+} from '../tools/pageHandlers.js';
+import {
+  queryPortalsHandler,
+  getPortalHandler,
+  listPortalsHandler,
+  queryWidgetInstancesHandler,
+  getWidgetInstanceHandler
+} from '../tools/portalHandlers.js';
+import {
   queryIncidentsSchema,
   getIncidentSchema,
   listRecentIncidentsSchema,
@@ -88,6 +129,36 @@ import {
   getChangeRequestSchema,
   listRecentChangeRequestsSchema
 } from './schemas.js';
+import {
+  createScriptIncludeSchema,
+  getScriptIncludeSchema,
+  updateScriptIncludeSchema,
+  deleteScriptIncludeSchema,
+  queryScriptIncludesSchema,
+  listRecentScriptIncludesSchema,
+  validateScriptIncludeSchema,
+  testScriptIncludeSchema,
+  queryWidgetsSchema,
+  getWidgetSchema,
+  listRecentWidgetsSchema,
+  createWidgetSchema,
+  updateWidgetSchema,
+  cloneWidgetSchema,
+  validateWidgetSchema,
+  getWidgetDependenciesSchema,
+  getPagesUsingWidgetSchema,
+  queryPagesSchema,
+  getPageSchema,
+  listRecentPagesSchema,
+  createPageSchema,
+  updatePageSchema,
+  getWidgetsByPageSchema,
+  queryPortalsSchema,
+  getPortalSchema,
+  listPortalsSchema,
+  queryWidgetInstancesSchema,
+  getWidgetInstanceSchema
+} from './schemas.js';
 import { logger } from '../utils/logger.js';
 
 /**
@@ -111,6 +182,11 @@ export class MCPServer {
   private storyService: StoryService;
   private scrumTaskService: ScrumTaskService;
   private changeRequestService: ChangeRequestService;
+  private scriptIncludeService: ScriptIncludeService;
+  private widgetService: WidgetService;
+  private pageService: PageService;
+  private portalService: PortalService;
+  private widgetInstanceService: WidgetInstanceService;
   private tools: Map<string, ToolDefinition>;
 
   /**
@@ -174,6 +250,11 @@ export class MCPServer {
     this.storyService = new StoryService(this.client);
     this.scrumTaskService = new ScrumTaskService(this.client);
     this.changeRequestService = new ChangeRequestService(this.client);
+    this.scriptIncludeService = new ScriptIncludeService(this.client);
+    this.widgetService = new WidgetService(this.client);
+    this.pageService = new PageService(this.client);
+    this.portalService = new PortalService(this.client);
+    this.widgetInstanceService = new WidgetInstanceService(this.client);
 
     // Set up request handlers
     this.setupHandlers();
@@ -698,6 +779,263 @@ export class MCPServer {
       inputSchema: listRecentChangeRequestsSchema,
       handler: async (params: unknown) => {
         return await listRecentChangeRequestsHandler(params as any, this.changeRequestService);
+      }
+    });
+
+    // Register Script Include tools
+    this.registerTool({
+      name: 'create_script_include',
+      description: 'Create a new Script Include in ServiceNow. Validates JavaScript code for security issues and pattern compliance. Returns the sys_id of the created Script Include.',
+      inputSchema: createScriptIncludeSchema,
+      handler: async (params: unknown) => {
+        return await createScriptIncludeHandler(params as any, this.scriptIncludeService);
+      }
+    });
+
+    this.registerTool({
+      name: 'get_script_include',
+      description: 'Retrieve a specific Script Include by sys_id or api_name. Returns complete Script Include details including the JavaScript code.',
+      inputSchema: getScriptIncludeSchema,
+      handler: async (params: unknown) => {
+        return await getScriptIncludeHandler(params as any, this.scriptIncludeService);
+      }
+    });
+
+    this.registerTool({
+      name: 'update_script_include',
+      description: 'Update an existing Script Include. Validates JavaScript code for security issues if script is being updated. Returns the sys_id of the updated Script Include.',
+      inputSchema: updateScriptIncludeSchema,
+      handler: async (params: unknown) => {
+        return await updateScriptIncludeHandler(params as any, this.scriptIncludeService);
+      }
+    });
+
+    this.registerTool({
+      name: 'delete_script_include',
+      description: 'Delete a Script Include by sys_id. Returns success confirmation.',
+      inputSchema: deleteScriptIncludeSchema,
+      handler: async (params: unknown) => {
+        return await deleteScriptIncludeHandler(params as any, this.scriptIncludeService);
+      }
+    });
+
+    this.registerTool({
+      name: 'query_script_includes',
+      description: 'Query Script Includes using filter criteria. Supports filtering by name, api_name, active status, access level, client_callable flag, and custom query strings. Returns Script Include summaries.',
+      inputSchema: queryScriptIncludesSchema,
+      handler: async (params: unknown) => {
+        return await queryScriptIncludesHandler(params as any, this.scriptIncludeService);
+      }
+    });
+
+    this.registerTool({
+      name: 'list_recent_script_includes',
+      description: 'List the most recently created or updated Script Includes. Returns Script Include summaries ordered by updated timestamp in descending order (most recent first).',
+      inputSchema: listRecentScriptIncludesSchema,
+      handler: async (params: unknown) => {
+        return await listRecentScriptIncludesHandler(params as any, this.scriptIncludeService);
+      }
+    });
+
+    this.registerTool({
+      name: 'validate_script_include',
+      description: 'Validate JavaScript code for a Script Include. Checks for security violations, syntax errors, and discouraged patterns. Returns validation results with warnings and errors.',
+      inputSchema: validateScriptIncludeSchema,
+      handler: async (params: unknown) => {
+        return await validateScriptIncludeHandler(params as any, this.scriptIncludeService);
+      }
+    });
+
+    this.registerTool({
+      name: 'test_script_include',
+      description: 'Test a Script Include method. Validates that the Script Include and method exist. Note: Actual execution requires ServiceNow scripting API and is not yet implemented.',
+      inputSchema: testScriptIncludeSchema,
+      handler: async (params: unknown) => {
+        return await testScriptIncludeHandler(params as any, this.scriptIncludeService);
+      }
+    });
+
+    // Register Widget tools
+    this.registerTool({
+      name: 'query_widgets',
+      description: 'Query Service Portal widgets using filter criteria. Supports filtering by name, id, public status, category, data_table, and custom query strings. Returns widget summaries with key fields.',
+      inputSchema: queryWidgetsSchema,
+      handler: async (params: unknown) => {
+        return await queryWidgetsHandler(params as any, this.widgetService);
+      }
+    });
+
+    this.registerTool({
+      name: 'get_widget',
+      description: 'Retrieve a specific Service Portal widget by sys_id or widget id. Returns complete widget details including all scripts, templates, and configuration.',
+      inputSchema: getWidgetSchema,
+      handler: async (params: unknown) => {
+        return await getWidgetHandler(params as any, this.widgetService);
+      }
+    });
+
+    this.registerTool({
+      name: 'list_recent_widgets',
+      description: 'List the most recently created or updated Service Portal widgets. Returns widget summaries ordered by updated timestamp in descending order (most recent first).',
+      inputSchema: listRecentWidgetsSchema,
+      handler: async (params: unknown) => {
+        return await listRecentWidgetsHandler(params as any, this.widgetService);
+      }
+    });
+
+    this.registerTool({
+      name: 'create_widget',
+      description: 'Create a new Service Portal widget with HTML template, CSS/SCSS, client script, server script, and configuration. Validates all code for security issues before creation.',
+      inputSchema: createWidgetSchema,
+      handler: async (params: unknown) => {
+        return await createWidgetHandler(params as any, this.widgetService);
+      }
+    });
+
+    this.registerTool({
+      name: 'update_widget',
+      description: 'Update an existing Service Portal widget. Validates all code for security issues if scripts are being updated. Returns the sys_id of the updated widget.',
+      inputSchema: updateWidgetSchema,
+      handler: async (params: unknown) => {
+        return await updateWidgetHandler(params as any, this.widgetService);
+      }
+    });
+
+    this.registerTool({
+      name: 'clone_widget',
+      description: 'Clone an existing Service Portal widget as a starting point for customization. Copies all properties from the source widget with a new id and name.',
+      inputSchema: cloneWidgetSchema,
+      handler: async (params: unknown) => {
+        return await cloneWidgetHandler(params as any, this.widgetService);
+      }
+    });
+
+    this.registerTool({
+      name: 'validate_widget',
+      description: 'Validate Service Portal widget code before saving. Checks HTML, CSS/SCSS, JavaScript for syntax errors and security issues. Returns validation results with warnings and errors.',
+      inputSchema: validateWidgetSchema,
+      handler: async (params: unknown) => {
+        return await validateWidgetHandler(params as any, this.widgetService);
+      }
+    });
+
+    this.registerTool({
+      name: 'get_widget_dependencies',
+      description: 'Retrieve dependencies for a Service Portal widget. Returns list of external JavaScript or CSS resources required by the widget.',
+      inputSchema: getWidgetDependenciesSchema,
+      handler: async (params: unknown) => {
+        return await getWidgetDependenciesHandler(params as any, this.widgetService);
+      }
+    });
+
+    this.registerTool({
+      name: 'get_pages_using_widget',
+      description: 'Find all Service Portal pages that use a specific widget. Returns list of pages with the widget to understand widget usage and impact of changes.',
+      inputSchema: getPagesUsingWidgetSchema,
+      handler: async (params: unknown) => {
+        return await getPagesUsingWidgetHandler(params as any, this.widgetService);
+      }
+    });
+
+    // Register Page tools
+    this.registerTool({
+      name: 'query_pages',
+      description: 'Query Service Portal pages using filter criteria. Supports filtering by title, id, public status, portal, and custom query strings. Returns page summaries with key fields.',
+      inputSchema: queryPagesSchema,
+      handler: async (params: unknown) => {
+        return await queryPagesHandler(params as any, this.pageService);
+      }
+    });
+
+    this.registerTool({
+      name: 'get_page',
+      description: 'Retrieve a specific Service Portal page by sys_id or page id. Returns complete page details including layout and widget instances.',
+      inputSchema: getPageSchema,
+      handler: async (params: unknown) => {
+        return await getPageHandler(params as any, this.pageService);
+      }
+    });
+
+    this.registerTool({
+      name: 'list_recent_pages',
+      description: 'List the most recently created or updated Service Portal pages. Returns page summaries ordered by updated timestamp in descending order (most recent first).',
+      inputSchema: listRecentPagesSchema,
+      handler: async (params: unknown) => {
+        return await listRecentPagesHandler(params as any, this.pageService);
+      }
+    });
+
+    this.registerTool({
+      name: 'create_page',
+      description: 'Create a new Service Portal page. Validates portal and role references before creation. Returns the sys_id of the created page.',
+      inputSchema: createPageSchema,
+      handler: async (params: unknown) => {
+        return await createPageHandler(params as any, this.pageService);
+      }
+    });
+
+    this.registerTool({
+      name: 'update_page',
+      description: 'Update an existing Service Portal page. Validates portal and role references if being updated. Returns the sys_id of the updated page.',
+      inputSchema: updatePageSchema,
+      handler: async (params: unknown) => {
+        return await updatePageHandler(params as any, this.pageService);
+      }
+    });
+
+    this.registerTool({
+      name: 'get_widgets_by_page',
+      description: 'Retrieve all widgets used on a specific Service Portal page. Returns widget information including configuration and placement.',
+      inputSchema: getWidgetsByPageSchema,
+      handler: async (params: unknown) => {
+        return await getWidgetsByPageHandler(params as any, this.pageService);
+      }
+    });
+
+    // Register Portal tools
+    this.registerTool({
+      name: 'query_portals',
+      description: 'Query Service Portals using filter criteria. Supports filtering by title, url_suffix, and custom query strings. Returns portal summaries with key fields.',
+      inputSchema: queryPortalsSchema,
+      handler: async (params: unknown) => {
+        return await queryPortalsHandler(params as any, this.portalService);
+      }
+    });
+
+    this.registerTool({
+      name: 'get_portal',
+      description: 'Retrieve a specific Service Portal by sys_id or url_suffix. Returns complete portal details including theme and configuration.',
+      inputSchema: getPortalSchema,
+      handler: async (params: unknown) => {
+        return await getPortalHandler(params as any, this.portalService);
+      }
+    });
+
+    this.registerTool({
+      name: 'list_portals',
+      description: 'List all Service Portals ordered by title. Returns portal summaries with key fields.',
+      inputSchema: listPortalsSchema,
+      handler: async (params: unknown) => {
+        return await listPortalsHandler(params as any, this.portalService);
+      }
+    });
+
+    // Register Widget Instance tools
+    this.registerTool({
+      name: 'query_widget_instances',
+      description: 'Query Service Portal widget instances using filter criteria. Supports filtering by page, widget, and custom query strings. Returns widget instance summaries with key fields.',
+      inputSchema: queryWidgetInstancesSchema,
+      handler: async (params: unknown) => {
+        return await queryWidgetInstancesHandler(params as any, this.widgetInstanceService);
+      }
+    });
+
+    this.registerTool({
+      name: 'get_widget_instance',
+      description: 'Retrieve a specific Service Portal widget instance by sys_id. Returns complete widget instance details including configuration and placement.',
+      inputSchema: getWidgetInstanceSchema,
+      handler: async (params: unknown) => {
+        return await getWidgetInstanceHandler(params as any, this.widgetInstanceService);
       }
     });
 
